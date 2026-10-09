@@ -1,0 +1,15 @@
+package: cloud.lazycat.app.csapp-zh-markdown
+version: 1.2.0
+name: CSAPP 中文版
+description: "《深入理解计算机系统》（CSAPP 第三版）中文 Markdown 学习资料：正文、习题、答案与八个实验"
+min_os_version: "1.5.0"
+homepage: https://github.com/SunnyMaria/csapp-zh-markdown
+author: SunnyMaria
+license: CC BY-NC-SA 4.0
+locales:
+  zh:
+    name: "CSAPP 中文版"
+    description: "《深入理解计算机系统》中文 Markdown 学习资料：按章节正文、习题与原书答案、八个实验中文说明（在线阅读站）"
+  en:
+    name: "CSAPP (Chinese)"
+    description: "Chinese Markdown study material for Computer Systems: A Programmer's Perspective (3rd Edition)"

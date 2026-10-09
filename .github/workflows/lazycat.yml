@@ -1,0 +1,73 @@
+name: Sync upstream and publish LazyCat application
+
+on:
+  # Daily upstream check; GitHub Actions cron is UTC (CST = UTC+8)
+  schedule:
+    - cron: "10 2 * * *"
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - .github/lazycat-action.yml
+      - .github/workflows/lazycat.yml
+      - lzc-build.yml
+      - lzc-manifest.yml
+      - package.yml
+      - build.sh
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # git version source 不支持 schedule 自动检查，这里手动比对上游 release tag：
+  # 有新版本则 bump package.yml 并 push，push 事件触发下方 lazycat 发布。
+  sync-upstream:
+    if: github.event_name != 'push' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Sync upstream version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # 优先取最新 release tag；上游若无 release 则回退到最新 git tag
+          RAW="$(gh api repos/SunnyMaria/csapp-zh-markdown/releases/latest --jq '.tag_name' 2>/dev/null || true)"
+          if [ -z "$RAW" ]; then
+            RAW="$(gh api repos/SunnyMaria/csapp-zh-markdown/tags --jq '.[0].name' 2>/dev/null || true)"
+          fi
+          RAW="${RAW#v}"
+          # normalize to SemVer: 1.2 -> 1.2.0 ; 1.2.3 keep
+          SEGS="$(awk -F. '{print NF}' <<<"$RAW")"
+          if [ "$SEGS" = "1" ]; then LATEST="$RAW.0.0"; elif [ "$SEGS" = "2" ]; then LATEST="$RAW.0"; else LATEST="$RAW"; fi
+          CURRENT="$(sed -n 's/^version: *//p' package.yml)"
+          echo "upstream=$LATEST current=$CURRENT"
+          if [ -z "$LATEST" ] || [ "$LATEST" = "$CURRENT" ]; then
+            echo "no update needed"
+            exit 0
+          fi
+          sed -i "s/^version: .*/version: $LATEST/" package.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.yml
+          git commit -m "chore: bump to upstream csapp-zh-markdown $LATEST"
+          git push
+
+  lazycat:
+    # schedule 事件只做上游检查；发布由 sync 产生的 push 触发
+    if: github.event_name != 'schedule'
+    uses: ca-x/lazycat-github-action/.github/workflows/lazycat.yml@v1
+    with:
+      operation: auto
+      config: .github/lazycat-action.yml
+      dry-run: ${{ github.event_name == 'pull_request' }}
+      versioned-release-asset: true
+    # 仅发布喵喵商店（MiaoMiao private store）；官方平台不发布，LZC_API_TOKEN 不映射
+    secrets:
+      APPSTORE_URL: ${{ secrets.APPSTORE_URL }}
+      APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+      APP_ID: ${{ secrets.APP_ID }}
+      PRIVATE_STORE_GROUP_CODES: ${{ secrets.PRIVATE_STORE_GROUP_CODES }}

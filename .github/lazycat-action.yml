@@ -1,0 +1,30 @@
+version: 1
+
+project:
+  root: .
+  build_config: lzc-build.yml
+  package_file: package.yml
+  output: dist/csapp-zh-markdown.lpk
+  target_arch: amd64
+
+update:
+  strategy: publish
+  allow_downgrade: false
+  version_source:
+    type: git
+    image: ""
+
+build:
+  run_buildscript: true
+
+images: []
+
+stores:
+  official:
+    # Official store publication is intentionally disabled; publish only to MiaoMiao Store.
+    enabled: false
+  private:
+    enabled: true
+    skip_if_version_exists: true
+    name: CSAPP 中文版
+    summary: 深入理解计算机系统（第三版）中文 Markdown 学习资料，含在线阅读站

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# csapp-zh-markdown 静态站构建：克隆上游源码（版本 tag）→ Quarto 渲染 → site/
+# 由 LazyCat GitHub Action 的 buildscript 在每次构建时执行
+set -euo pipefail
+
+VERSION="${LAZYCAT_VERSION:-${VERSION:-}}"
+echo "==> building csapp-zh-markdown version: ${VERSION:-<default branch>}"
+
+rm -rf .upstream site
+CLONE_OK=0
+if [ -n "$VERSION" ]; then
+  # 尝试多种 tag 形式：vX.Y.Z / vX.Y / X.Y.Z / X.Y / X.Y.0
+  BASE="${VERSION%%.0}"
+  for TAG in "v${VERSION}" "v${BASE}" "${VERSION}" "${BASE}"; do
+    if [ -n "${TAG}" ] && git clone --depth 1 --branch "$TAG" https://github.com/SunnyMaria/csapp-zh-markdown.git .upstream 2>/dev/null; then
+      echo "==> cloned tag $TAG"
+      CLONE_OK=1
+      break
+    fi
+  done
+fi
+if [ "$CLONE_OK" != "1" ]; then
+  echo "==> tag not found, falling back to default branch"
+  git clone --depth 1 https://github.com/SunnyMaria/csapp-zh-markdown.git .upstream
+fi
+
+# 安装 Quarto（静态 tarball，无需 root）
+QUARTO_VERSION=1.9.38
+if ! command -v quarto >/dev/null 2>&1; then
+  echo "==> installing Quarto ${QUARTO_VERSION}"
+  curl -sL -o /tmp/quarto.tar.gz "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.tar.gz"
+  mkdir -p "$HOME/quarto"
+  tar -xzf /tmp/quarto.tar.gz -C "$HOME/quarto"
+  export PATH="$HOME/quarto/quarto-${QUARTO_VERSION}/bin:$PATH"
+fi
+quarto --version
+
+# Python 依赖（Pillow：读取图片尺寸）
+python3 -m pip install --user --upgrade pip >/dev/null 2>&1 || true
+python3 -m pip install --user -r .upstream/website/requirements.txt >/dev/null
+export PATH="$HOME/.local/bin:$PATH"
+
+# 生成页面 + 渲染
+cd .upstream
+python3 website/scripts/build.py
+quarto render website/build
+cd ..
+cp -r .upstream/website/build/_site site
+echo "==> site built: $(du -sh site | cut -f1)"

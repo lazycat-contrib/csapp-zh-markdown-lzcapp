@@ -1,0 +1,8 @@
+application:
+  subdomain: csapp
+  multi_instance: false
+  public_path:
+    - /
+  upstreams:
+    - location: /
+      backend: file:///lzcapp/pkg/content/
