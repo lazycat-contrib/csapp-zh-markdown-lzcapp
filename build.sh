@@ -46,7 +46,27 @@ fi
 # 生成页面 + 渲染
 cd .upstream
 python3 website/scripts/build.py
+echo "==> rendering with Quarto"
 quarto render website/build
+RENDER_RC=$?
+echo "==> quarto render exit code: ${RENDER_RC}"
+
+# 渲染完整性校验：必须产出 index.html 与全部页面（499 页），否则 fail（避免静默产出空站）
+SITE_DIR="website/build/_site"
+if [ "${RENDER_RC}" != "0" ] || [ ! -f "${SITE_DIR}/index.html" ]; then
+  echo "ERROR: Quarto render failed or produced no index.html" >&2
+  echo "---- _site listing ----" >&2
+  ls -la "${SITE_DIR}" 2>&1 | head -30 >&2
+  echo "---- build dir ----" >&2
+  ls "${SITE_DIR}/../" 2>&1 | head -30 >&2
+  exit 1
+fi
+PAGE_COUNT="$(find "${SITE_DIR}" -name '*.html' | wc -l)"
+echo "==> render check: ${PAGE_COUNT} html pages"
+if [ "${PAGE_COUNT}" -lt 100 ]; then
+  echo "ERROR: too few rendered pages (${PAGE_COUNT} < 100)" >&2
+  exit 1
+fi
 cd ..
 cp -r .upstream/website/build/_site site
-echo "==> site built: $(du -sh site | cut -f1)"
+echo "==> site built: $(du -sh site | cut -f1), pages: ${PAGE_COUNT}"
