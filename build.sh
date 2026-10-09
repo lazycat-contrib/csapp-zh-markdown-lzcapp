@@ -49,6 +49,13 @@ python3 website/scripts/build.py
 echo "==> rendering with Quarto"
 echo "pwd=$(pwd)"
 echo "quarto=$(command -v quarto)"
+# 最小自检：验证 quarto 在此环境能否真的渲染（把全过程输出到日志）
+mkdir -p /tmp/qmin && printf '# hello\n\ntext\n' > /tmp/qmin/t.qmd
+( cd /tmp/qmin && quarto render t.qmd --to html ) > /tmp/quarto-min.log 2>&1
+MIN_RC=$?
+echo "---- minimal render log ----"
+cat /tmp/quarto-min.log 2>/dev/null | head -30
+echo "---- minimal rc=${MIN_RC}, output: $(ls /tmp/qmin/ 2>/dev/null | tr '\n' ' ') ----"
 cd website/build
 quarto render . > /tmp/quarto-render.log 2>&1
 RENDER_RC=$?
