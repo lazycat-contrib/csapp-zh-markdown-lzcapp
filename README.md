@@ -19,6 +19,15 @@
 - 每日定时任务比对上游 release tag（`v1.2` → `1.2.0` 归一为 SemVer），有新版本时自动 bump
   `package.yml` 并触发发布；也可以手动触发 workflow 从上游默认分支构建。
 
+## 维护注意（勿踩的坑）
+
+- **克隆目录不能用隐藏名**：`build.sh` 把上游克隆到 `upstream/`，**不要改成 `.upstream/`
+  之类的点开头目录**。Quarto 的文件扫描器不会进入隐藏目录，会导致 `website/build` 下
+  499 个 qmd 全部不可见（项目输入为 0），`quarto render` 以退出码 0 静默产出只有
+  `sitemap.xml`/`robots.txt` 的空站。
+- `build.sh` 内置两道自检：Quarto 发现的输入数（<100 即失败）与渲染页数（<100 即失败），
+  空站会在 CI 直接报错而不是发布坏包。
+
 ## 版权
 
 内容来自 [SunnyMaria/csapp-zh-markdown](https://github.com/SunnyMaria/csapp-zh-markdown)，
