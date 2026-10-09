@@ -56,6 +56,9 @@ MIN_RC=$?
 echo "---- minimal render log ----"
 cat /tmp/quarto-min.log 2>/dev/null | head -30
 echo "---- minimal rc=${MIN_RC}, output: $(ls /tmp/qmin/ 2>/dev/null | tr '\n' ' ') ----"
+( cd website/build && quarto inspect ) > /tmp/quarto-inspect.log 2>&1 || true
+echo "---- quarto inspect (head) ----"
+head -30 /tmp/quarto-inspect.log || true
 cd website/build
 quarto render . > /tmp/quarto-render.log 2>&1
 RENDER_RC=$?
