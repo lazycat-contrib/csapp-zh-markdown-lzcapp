@@ -59,7 +59,14 @@ MIN_RC=$?
 echo "---- minimal render log ----"
 cat /tmp/quarto-min.log 2>/dev/null | head -30
 echo "---- minimal rc=${MIN_RC}, output: $(ls /tmp/qmin/ 2>/dev/null | tr '\n' ' ') ----"
-( cd website/build && quarto inspect ) > /tmp/quarto-inspect.log 2>&1 || true
+echo "---- debug: git / ignore context ----"
+( cd website/build &&   echo "git toplevel: $(git rev-parse --show-toplevel 2>&1 || echo none)" &&   echo "git check-ignore: $(git check-ignore -v index.qmd 2>&1 || echo 'NOT IGNORED')" &&   echo "qmd count here: $(find . -name '*.qmd' | wc -l)" &&   echo "ls sample: $(ls | head -6 | tr '\n' ' ')" ) || true
+echo "---- debug: .gitignore (repo) ----"
+cat .gitignore 2>&1 || true
+echo "---- debug: git status of build dir ----"
+git status --porcelain --untracked-files=all .upstream/website/build 2>&1 | head -5 || true
+echo "---- debug: core.excludesFile / global ignore ----"
+git config --get core.excludesFile 2>&1 || echo "(none)"
 echo "---- quarto inspect: input file count ----"
 python3 - <<'PYEOF' || echo "(inspect parse failed)"
 import json
