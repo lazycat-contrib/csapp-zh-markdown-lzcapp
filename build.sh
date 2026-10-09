@@ -23,6 +23,9 @@ if [ "$CLONE_OK" != "1" ]; then
   echo "==> tag not found, falling back to default branch"
   git clone --depth 1 https://github.com/SunnyMaria/csapp-zh-markdown.git .upstream
 fi
+# 关键：删除 clone 的 .git，避免 Quarto 应用外层仓库的 gitignore 规则
+# （否则 build/ 下文件因 .upstream/ 被忽略而扫描不到，输入为空导致空站）
+rm -rf .upstream/.git
 
 # 安装 Quarto（静态 tarball，无需 root）
 QUARTO_VERSION=1.9.38
