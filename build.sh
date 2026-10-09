@@ -57,8 +57,18 @@ echo "---- minimal render log ----"
 cat /tmp/quarto-min.log 2>/dev/null | head -30
 echo "---- minimal rc=${MIN_RC}, output: $(ls /tmp/qmin/ 2>/dev/null | tr '\n' ' ') ----"
 ( cd website/build && quarto inspect ) > /tmp/quarto-inspect.log 2>&1 || true
-echo "---- quarto inspect (head) ----"
-head -30 /tmp/quarto-inspect.log || true
+echo "---- quarto inspect: input file count ----"
+python3 - <<'PYEOF' || echo "(inspect parse failed)"
+import json
+d = json.load(open('/tmp/quarto-inspect.log'))
+files = d.get('files', {})
+inputs = files.get('input', [])
+print('engines:', d.get('engines'))
+print('input count:', len(inputs))
+print('first 3:', inputs[:3])
+PYEOF
+echo "---- quarto inspect: engine/config keys ----"
+python3 -c "import json; d=json.load(open('/tmp/quarto-inspect.log')); print('top keys:', list(d.keys())); print('config keys:', list(d.get('config',{}).keys())[:15])" 2>/dev/null || true
 cd website/build
 quarto render . > /tmp/quarto-render.log 2>&1
 RENDER_RC=$?
