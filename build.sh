@@ -35,10 +35,13 @@ if ! command -v quarto >/dev/null 2>&1; then
 fi
 quarto --version
 
-# Python 依赖（Pillow：读取图片尺寸）
-python3 -m pip install --user --upgrade pip >/dev/null 2>&1 || true
-python3 -m pip install --user -r .upstream/website/requirements.txt >/dev/null
-export PATH="$HOME/.local/bin:$PATH"
+# Python 依赖：main 分支的 build.py 需要 Pillow（读取图片尺寸），
+# v1.2 及更早的 build.py 不依赖第三方库（也没有 requirements.txt）。
+if [ -f .upstream/website/requirements.txt ]; then
+  python3 -m pip install --user --upgrade pip >/dev/null 2>&1 || true
+  python3 -m pip install --user -r .upstream/website/requirements.txt >/dev/null
+  export PATH="$HOME/.local/bin:$PATH"
+fi
 
 # 生成页面 + 渲染
 cd .upstream
