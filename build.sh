@@ -47,8 +47,12 @@ fi
 cd .upstream
 python3 website/scripts/build.py
 echo "==> rendering with Quarto"
-quarto render website/build > /tmp/quarto-render.log 2>&1
+echo "pwd=$(pwd)"
+echo "quarto=$(command -v quarto)"
+cd website/build
+quarto render . > /tmp/quarto-render.log 2>&1
 RENDER_RC=$?
+cd ../..
 echo "---- quarto render log (first 40 lines) ----"
 head -40 /tmp/quarto-render.log || true
 echo "---- quarto render log (last 15 lines) ----"
