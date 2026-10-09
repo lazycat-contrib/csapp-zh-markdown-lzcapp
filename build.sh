@@ -6,13 +6,16 @@ set -euo pipefail
 VERSION="${LAZYCAT_VERSION:-${VERSION:-}}"
 echo "==> building csapp-zh-markdown version: ${VERSION:-<default branch>}"
 
-rm -rf .upstream site
+# 注意：clone 目录必须使用「不以 . 开头」的名字。
+# Quarto 的文件扫描器不会进入隐藏目录（.upstream/...），会导致 project 输入为 0、
+# render 静默产出空站。历史上这里用过 .upstream 并因此踩坑，勿改回。
+rm -rf upstream site
 CLONE_OK=0
 if [ -n "$VERSION" ]; then
   # 尝试多种 tag 形式：vX.Y.Z / vX.Y / X.Y.Z / X.Y / X.Y.0
   BASE="${VERSION%%.0}"
   for TAG in "v${VERSION}" "v${BASE}" "${VERSION}" "${BASE}"; do
-    if [ -n "${TAG}" ] && git clone --depth 1 --branch "$TAG" https://github.com/SunnyMaria/csapp-zh-markdown.git .upstream 2>/dev/null; then
+    if [ -n "${TAG}" ] && git clone --depth 1 --branch "$TAG" https://github.com/SunnyMaria/csapp-zh-markdown.git upstream 2>/dev/null; then
       echo "==> cloned tag $TAG"
       CLONE_OK=1
       break
@@ -21,11 +24,10 @@ if [ -n "$VERSION" ]; then
 fi
 if [ "$CLONE_OK" != "1" ]; then
   echo "==> tag not found, falling back to default branch"
-  git clone --depth 1 https://github.com/SunnyMaria/csapp-zh-markdown.git .upstream
+  git clone --depth 1 https://github.com/SunnyMaria/csapp-zh-markdown.git upstream
 fi
-# 关键：删除 clone 的 .git，避免 Quarto 应用外层仓库的 gitignore 规则
-# （否则 build/ 下文件因 .upstream/ 被忽略而扫描不到，输入为空导致空站）
-rm -rf .upstream/.git
+# 删除 clone 的 .git：构建区不参与 git，避免任何 ignore 语义干扰 Quarto 的文件发现
+rm -rf upstream/.git
 
 # 安装 Quarto（静态 tarball，无需 root）
 QUARTO_VERSION=1.9.38
@@ -40,63 +42,39 @@ quarto --version
 
 # Python 依赖：main 分支的 build.py 需要 Pillow（读取图片尺寸），
 # v1.2 及更早的 build.py 不依赖第三方库（也没有 requirements.txt）。
-if [ -f .upstream/website/requirements.txt ]; then
+if [ -f upstream/website/requirements.txt ]; then
   python3 -m pip install --user --upgrade pip >/dev/null 2>&1 || true
-  python3 -m pip install --user -r .upstream/website/requirements.txt >/dev/null
+  python3 -m pip install --user -r upstream/website/requirements.txt >/dev/null
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
 # 生成页面 + 渲染
-cd .upstream
+cd upstream
 python3 website/scripts/build.py
 echo "==> rendering with Quarto"
-echo "pwd=$(pwd)"
-echo "quarto=$(command -v quarto)"
-# 最小自检：验证 quarto 在此环境能否真的渲染（把全过程输出到日志）
-mkdir -p /tmp/qmin && printf '# hello\n\ntext\n' > /tmp/qmin/t.qmd
-( cd /tmp/qmin && quarto render t.qmd --to html ) > /tmp/quarto-min.log 2>&1
-MIN_RC=$?
-echo "---- minimal render log ----"
-cat /tmp/quarto-min.log 2>/dev/null | head -30
-echo "---- minimal rc=${MIN_RC}, output: $(ls /tmp/qmin/ 2>/dev/null | tr '\n' ' ') ----"
-echo "---- debug: git / ignore context ----"
-( cd website/build &&   echo "git toplevel: $(git rev-parse --show-toplevel 2>&1 || echo none)" &&   echo "git check-ignore: $(git check-ignore -v index.qmd 2>&1 || echo 'NOT IGNORED')" &&   echo "qmd count here: $(find . -name '*.qmd' | wc -l)" &&   echo "ls sample: $(ls | head -6 | tr '\n' ' ')" ) || true
-echo "---- debug: .gitignore (repo) ----"
-cat .gitignore 2>&1 || true
-echo "---- debug: git status of build dir ----"
-git status --porcelain --untracked-files=all .upstream/website/build 2>&1 | head -5 || true
-echo "---- debug: core.excludesFile / global ignore ----"
-git config --get core.excludesFile 2>&1 || echo "(none)"
-echo "---- quarto inspect: input file count ----"
-python3 - <<'PYEOF' || echo "(inspect parse failed)"
-import json
-d = json.load(open('/tmp/quarto-inspect.log'))
-files = d.get('files', {})
-inputs = files.get('input', [])
-print('engines:', d.get('engines'))
-print('input count:', len(inputs))
-print('first 3:', inputs[:3])
-PYEOF
-echo "---- quarto inspect: engine/config keys ----"
-python3 -c "import json; d=json.load(open('/tmp/quarto-inspect.log')); print('top keys:', list(d.keys())); print('config keys:', list(d.get('config',{}).keys())[:15])" 2>/dev/null || true
 cd website/build
-quarto render . > /tmp/quarto-render.log 2>&1
-RENDER_RC=$?
-cd ../..
-echo "---- quarto render log (first 40 lines) ----"
-head -40 /tmp/quarto-render.log || true
-echo "---- quarto render log (last 15 lines) ----"
-tail -15 /tmp/quarto-render.log || true
+
+# 自检：先确认 Quarto 能发现项目输入（远低于预期即视为构建配置错误，快速失败）
+INPUT_COUNT="$(quarto inspect . 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("files",{}).get("input",[])))' 2>/dev/null || echo 0)"
+echo "==> quarto discovered inputs: ${INPUT_COUNT}"
+if [ "${INPUT_COUNT}" -lt 100 ]; then
+  echo "ERROR: Quarto found ${INPUT_COUNT} input files (expected 400+); aborting." >&2
+  exit 1
+fi
+
+set +e
+quarto render . 2>&1 | tee /tmp/quarto-render.log
+RENDER_RC="${PIPESTATUS[0]}"
+set -e
 echo "==> quarto render exit code: ${RENDER_RC}"
 
-# 渲染完整性校验：必须产出 index.html 与全部页面（499 页），否则 fail（避免静默产出空站）
-SITE_DIR="website/build/_site"
+# 渲染完整性校验：必须产出 index.html 与全部页面（约 499 页），否则 fail
+cd ../../..
+SITE_DIR="upstream/website/build/_site"
 if [ "${RENDER_RC}" != "0" ] || [ ! -f "${SITE_DIR}/index.html" ]; then
   echo "ERROR: Quarto render failed or produced no index.html" >&2
   echo "---- _site listing ----" >&2
   ls -la "${SITE_DIR}" 2>&1 | head -30 >&2
-  echo "---- build dir ----" >&2
-  ls "${SITE_DIR}/../" 2>&1 | head -30 >&2
   exit 1
 fi
 PAGE_COUNT="$(find "${SITE_DIR}" -name '*.html' | wc -l)"
@@ -105,6 +83,5 @@ if [ "${PAGE_COUNT}" -lt 100 ]; then
   echo "ERROR: too few rendered pages (${PAGE_COUNT} < 100)" >&2
   exit 1
 fi
-cd ..
-cp -r .upstream/website/build/_site site
+cp -r "${SITE_DIR}" site
 echo "==> site built: $(du -sh site | cut -f1), pages: ${PAGE_COUNT}"
