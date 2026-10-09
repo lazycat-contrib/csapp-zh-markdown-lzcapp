@@ -47,8 +47,12 @@ fi
 cd .upstream
 python3 website/scripts/build.py
 echo "==> rendering with Quarto"
-quarto render website/build
+quarto render website/build > /tmp/quarto-render.log 2>&1
 RENDER_RC=$?
+echo "---- quarto render log (first 40 lines) ----"
+head -40 /tmp/quarto-render.log || true
+echo "---- quarto render log (last 15 lines) ----"
+tail -15 /tmp/quarto-render.log || true
 echo "==> quarto render exit code: ${RENDER_RC}"
 
 # 渲染完整性校验：必须产出 index.html 与全部页面（499 页），否则 fail（避免静默产出空站）
